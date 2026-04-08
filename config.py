@@ -1,0 +1,4 @@
+import os
+
+# Telegram Bot Token (shu yerga botfatherni bergan tokenni yozing)
+BOT_TOKEN = "8334494429:AAHYmAUlup3fqh8WyjmrwiHKz1tHCuB75Oo"
