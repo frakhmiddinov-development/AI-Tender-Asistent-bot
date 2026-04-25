@@ -1,0 +1,22 @@
+name = "ai-tender-assistant-bot"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = [ "nodejs_compat" ]
+
+[vars]
+# You can set variables here, but for secrets like BOT_TOKEN,
+# you should run: npx wrangler secret put BOT_TOKEN
+# For local dev, we add it here just for ease, but do NOT commit secrets in production!
+BOT_TOKEN = "8334494429:AAHYmAUlup3fqh8WyjmrwiHKz1tHCuB75Oo"
+CHANNEL_ID = "@kanal_usernameni_yozing"
+
+[triggers]
+# O'zbekiston vaqti (UZT) UTC+5 hisoblanadi. Vaqtlar UTC dagi cron kodi asosida belgilandi:
+# Ertalabki 08:00 UZT uchun -> "0 3 * * *"
+# Tushki 13:00 UZT uchun -> "0 8 * * *"
+# Kechki 18:00 UZT uchun -> "0 13 * * *"
+crons = ["* * * * *"]
+
+[[kv_namespaces]]
+binding = "CHANNELS_DB"
+id = "653f3516a6bb4d0bb3dc37168fc7be88"
