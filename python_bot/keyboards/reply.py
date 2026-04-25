@@ -22,9 +22,9 @@ def get_main_menu(lang: str) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=texts['btn_tender_uz'])],
-            [KeyboardButton(text=texts['btn_exh_uz'])],
-            [KeyboardButton(text=texts['btn_exh_glb'])],
-            [KeyboardButton(text=texts['btn_products'])]
+            [KeyboardButton(text=texts['btn_exh_uz']), KeyboardButton(text=texts['btn_exh_glb'])],
+            [KeyboardButton(text=texts['btn_products'])],
+            [KeyboardButton(text=texts['btn_settings']), KeyboardButton(text=texts['btn_exit_admin'])]
         ],
         resize_keyboard=True,
         input_field_placeholder=texts['main_menu']

@@ -20,8 +20,14 @@ async def main():
     dp = Dispatcher()
 
     # Register routers to dispatcher
+    from handlers import admin
     dp.include_router(start.router)
+    dp.include_router(admin.router)
     dp.include_router(menu.router)
+
+    # Initialize Scheduler
+    from utils.scheduler import setup_scheduler
+    setup_scheduler(bot)
 
     # Ignore pending updates and start polling
     await bot.delete_webhook(drop_pending_updates=True)
