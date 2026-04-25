@@ -38,23 +38,90 @@ class AdminStates(StatesGroup):
     awaiting_new_pass = State()
     awaiting_confirm_pass = State()
 
-def get_admin_kb(lang):
-    builder = ReplyKeyboardBuilder()
-    builder.button(text=TEXTS[lang]['btn_channels'])
-    builder.button(text=TEXTS[lang]['btn_schedules'])
-    builder.button(text=TEXTS[lang]['btn_websites'])
-    builder.button(text=TEXTS[lang]['btn_keywords'])
-    builder.button(text=TEXTS[lang]['btn_openai_token'])
-    builder.button(text=TEXTS[lang]['btn_message_prompt'])
-    builder.button(text=TEXTS[lang]['btn_change_password'])
-    builder.button(text=TEXTS[lang]['btn_exit_admin'])
-    builder.adjust(2)
-    return builder.as_markup(resize_keyboard=True)
+# Helper functions for showing menus (for hierarchical navigation)
+async def show_admin_menu(message: Message, lang: str):
+    await message.answer(TEXTS[lang]['msg_admin_menu'], reply_markup=get_admin_kb(lang))
 
-def get_back_kb(lang):
+async def show_channels_menu(message: Message, lang: str):
+    channels = db.get("channels", [])
+    text = TEXTS[lang]['msg_channels_list'] + "\n\n"
+    text += "\n".join(channels) if channels else (
+        "Hozircha bazada kanallar yo'q." if lang == 'uz' else 
+        "В базе пока нет каналов." if lang == 'ru' else "No channels in database yet."
+    )
+    
     builder = ReplyKeyboardBuilder()
+    builder.button(text=TEXTS[lang]['btn_add_channel'])
+    builder.button(text=TEXTS[lang]['btn_delete_channel'])
     builder.button(text=TEXTS[lang]['btn_back'])
-    return builder.as_markup(resize_keyboard=True)
+    builder.adjust(2)
+    await message.answer(text, reply_markup=builder.as_markup(resize_keyboard=True))
+
+async def show_schedules_menu(message: Message, lang: str):
+    schedules = db.get("schedules", [])
+    text = TEXTS[lang]['msg_schedules_list'] + "\n\n"
+    text += "\n".join(schedules) if schedules else (
+        "Hozircha bazada vaqtlar yo'q." if lang == 'uz' else 
+        "В базе пока нет времени." if lang == 'ru' else "No schedules in database yet."
+    )
+    
+    builder = ReplyKeyboardBuilder()
+    builder.button(text=TEXTS[lang]['btn_add_time'])
+    builder.button(text=TEXTS[lang]['btn_delete_time'])
+    builder.button(text=TEXTS[lang]['btn_back'])
+    builder.adjust(2)
+    await message.answer(text, reply_markup=builder.as_markup(resize_keyboard=True))
+
+async def show_websites_menu(message: Message, lang: str):
+    websites = db.get("websites", [])
+    text = TEXTS[lang]['msg_websites_list'] + "\n\n"
+    
+    if not websites:
+        text += "Hozircha bazada web saytlar yo'q." if lang == 'uz' else "В базе пока нет веб-сайтов." if lang == 'ru' else "No websites in database yet."
+    else:
+        for ws in websites:
+            url = ws['url'] if isinstance(ws, dict) else ws
+            has_cookie = "✅" if isinstance(ws, dict) and ws.get('cookie') else "❌"
+            text += f"🌐 {url} (Cookie: {has_cookie})\n"
+
+    builder = ReplyKeyboardBuilder()
+    builder.button(text=TEXTS[lang]['btn_add_website'])
+    builder.button(text=TEXTS[lang]['btn_delete_website'])
+    builder.button(text=TEXTS[lang]['btn_back'])
+    builder.adjust(2)
+    await message.answer(text, reply_markup=builder.as_markup(resize_keyboard=True))
+
+async def show_keywords_menu(message: Message, lang: str):
+    keywords = db.get("keywords", [])
+    text = TEXTS[lang]['msg_keywords_list'] + "\n\n"
+    text += "\n".join([f"• {k}" for k in keywords]) if keywords else (
+        "Hozircha bazada qidiruv so'zlari yo'q." if lang == 'uz' else 
+        "В базе пока нет ключевых слов." if lang == 'ru' else "No keywords in database yet."
+    )
+    
+    builder = ReplyKeyboardBuilder()
+    builder.button(text=TEXTS[lang]['btn_add_keyword'])
+    builder.button(text=TEXTS[lang]['btn_delete_keyword'])
+    builder.button(text=TEXTS[lang]['btn_back'])
+    builder.adjust(2)
+    await message.answer(text, reply_markup=builder.as_markup(resize_keyboard=True))
+
+async def show_openai_menu(message: Message, lang: str):
+    token = db.get("openai_token")
+    status = f"✅ {token[:10]}...{token[-4:]}" if token else ("❌ Kiritilmagan" if lang == 'uz' else "❌ Не введен")
+    await message.answer(f"{TEXTS[lang]['msg_token_status']}{status}\n\n{TEXTS[lang]['msg_ask_token']}", reply_markup=get_back_kb(lang))
+
+async def show_message_prompt_menu(message: Message, lang: str):
+    prompt = db.get("message_prompt")
+    status = f"✅ {prompt}" if prompt else ("❌ Kiritilmagan" if lang == 'uz' else "❌ Не введен")
+    
+    builder = ReplyKeyboardBuilder()
+    builder.button(text=TEXTS[lang]['btn_add_msg_prompt'])
+    builder.button(text=TEXTS[lang]['btn_test_msg_prompt'])
+    builder.button(text=TEXTS[lang]['btn_back'])
+    builder.adjust(2)
+    
+    await message.answer(f"{TEXTS[lang]['msg_msg_prompt_status']}{status}\n\n{TEXTS[lang]['msg_ask_msg_prompt']}", reply_markup=builder.as_markup(resize_keyboard=True))
 
 # --- Password Change Flow ---
 @router.message(F.text.in_([TEXTS['uz']['btn_change_password'], TEXTS['ru']['btn_change_password'], TEXTS['en']['btn_change_password']]))
@@ -72,7 +139,8 @@ async def process_old_password(message: Message, state: FSMContext):
         await message.answer(TEXTS[lang]['msg_ask_new_password'], reply_markup=get_back_kb(lang), parse_mode="HTML")
     else:
         await state.clear()
-        await message.answer(TEXTS[lang]['msg_wrong_password'], reply_markup=get_admin_kb(lang))
+        await message.answer(TEXTS[lang]['msg_wrong_password'])
+        await show_admin_menu(message, lang)
 
 @router.message(AdminStates.awaiting_new_pass)
 async def process_new_password(message: Message, state: FSMContext):
@@ -90,10 +158,11 @@ async def process_confirm_password(message: Message, state: FSMContext):
     if message.text == new_pass:
         db.set("admin_password", new_pass)
         await state.clear()
-        await message.answer(TEXTS[lang]['msg_password_changed'], reply_markup=get_admin_kb(lang))
+        await message.answer(TEXTS[lang]['msg_password_changed'])
     else:
         await state.clear()
-        await message.answer(TEXTS[lang]['msg_password_mismatch'], reply_markup=get_admin_kb(lang))
+        await message.answer(TEXTS[lang]['msg_password_mismatch'])
+    await show_admin_menu(message, lang)
 
 # Entry point for Settings
 @router.message(F.text.in_([TEXTS['uz']['btn_settings'], TEXTS['ru']['btn_settings'], TEXTS['en']['btn_settings']]))
@@ -109,7 +178,7 @@ async def check_admin_password(message: Message, state: FSMContext):
     
     if message.text == correct_pass:
         await state.clear()
-        await message.answer(TEXTS[lang]['msg_admin_menu'], reply_markup=get_admin_kb(lang))
+        await show_admin_menu(message, lang)
     else:
         await message.answer(TEXTS[lang]['msg_wrong_password'])
 
@@ -117,16 +186,7 @@ async def check_admin_password(message: Message, state: FSMContext):
 @router.message(F.text.in_([TEXTS['uz']['btn_channels'], TEXTS['ru']['btn_channels'], TEXTS['en']['btn_channels']]))
 async def list_channels(message: Message):
     lang = get_user_lang(message.from_user.id)
-    channels = db.get("channels", [])
-    text = TEXTS[lang]['msg_channels_list'] + "\n\n"
-    text += "\n".join(channels) if channels else "Yo'q"
-    
-    builder = ReplyKeyboardBuilder()
-    builder.button(text=TEXTS[lang]['btn_add_channel'])
-    builder.button(text=TEXTS[lang]['btn_delete_channel'])
-    builder.button(text=TEXTS[lang]['btn_back'])
-    builder.adjust(2)
-    await message.answer(text, reply_markup=builder.as_markup(resize_keyboard=True))
+    await show_channels_menu(message, lang)
 
 @router.message(F.text.in_([TEXTS['uz']['btn_add_channel'], TEXTS['ru']['btn_add_channel'], TEXTS['en']['btn_add_channel']]))
 async def ask_channel_add(message: Message, state: FSMContext):
@@ -140,37 +200,23 @@ async def process_channel_add(message: Message, state: FSMContext, bot: Bot):
     channel_id = message.text.strip()
     
     try:
-        await bot.send_message(channel_id, "Bot muvaffaqiyatli ulandi!")
+        await bot.send_message(channel_id, "Salom men bugundan boshlab sizlarga malumotlar jonataman !")
         channels = db.get("channels", [])
         if channel_id not in channels:
             channels.append(channel_id)
             db.set("channels", channels)
         await state.clear()
-        await message.answer(TEXTS[lang]['msg_channel_added'], reply_markup=get_admin_kb(lang))
+        await message.answer(TEXTS[lang]['msg_channel_added'])
+        await show_channels_menu(message, lang)
     except Exception:
         await message.answer(TEXTS[lang]['msg_channel_verify_error'])
+        await show_channels_menu(message, lang)
 
 # --- Websites ---
 @router.message(F.text.in_([TEXTS['uz']['btn_websites'], TEXTS['ru']['btn_websites'], TEXTS['en']['btn_websites']]))
 async def list_websites(message: Message):
     lang = get_user_lang(message.from_user.id)
-    websites = db.get("websites", [])
-    text = TEXTS[lang]['msg_websites_list'] + "\n\n"
-    
-    if not websites:
-        text += "Yo'q"
-    else:
-        for ws in websites:
-            url = ws['url'] if isinstance(ws, dict) else ws
-            has_cookie = "✅" if isinstance(ws, dict) and ws.get('cookie') else "❌"
-            text += f"🌐 {url} (Cookie: {has_cookie})\n"
-
-    builder = ReplyKeyboardBuilder()
-    builder.button(text=TEXTS[lang]['btn_add_website'])
-    builder.button(text=TEXTS[lang]['btn_delete_website'])
-    builder.button(text=TEXTS[lang]['btn_back'])
-    builder.adjust(2)
-    await message.answer(text, reply_markup=builder.as_markup(resize_keyboard=True))
+    await show_websites_menu(message, lang)
 
 @router.message(F.text.in_([TEXTS['uz']['btn_add_website'], TEXTS['ru']['btn_add_website'], TEXTS['en']['btn_add_website']]))
 async def ask_website_url(message: Message, state: FSMContext):
@@ -217,20 +263,50 @@ async def process_website_cookie(message: Message, state: FSMContext):
     
     db.set("websites", websites)
     await state.clear()
-    await message.answer(TEXTS[lang]['msg_website_added'], reply_markup=get_admin_kb(lang))
+    await message.answer(TEXTS[lang]['msg_website_added'])
+    await show_websites_menu(message, lang)
 
 # --- Back / Exit ---
 @router.message(F.text.in_([TEXTS['uz']['btn_back'], TEXTS['ru']['btn_back'], TEXTS['en']['btn_back']]))
 async def go_back(message: Message, state: FSMContext):
     lang = get_user_lang(message.from_user.id)
     current_state = await state.get_state()
-    if current_state:
-        await state.clear()
-        await message.answer(TEXTS[lang]['msg_admin_menu'], reply_markup=get_admin_kb(lang))
-    else:
+    
+    if not current_state:
         # From admin menu back to main menu
         from keyboards.reply import get_main_menu
         await message.answer(TEXTS[lang]['main_menu'], reply_markup=get_main_menu(lang))
+        return
+
+    # Hierarchical navigation
+    if current_state == AdminStates.awaiting_password:
+        await state.clear()
+        from keyboards.reply import get_main_menu
+        await message.answer(TEXTS[lang]['main_menu'], reply_markup=get_main_menu(lang))
+    elif "channel" in current_state.lower():
+        await state.clear()
+        await show_channels_menu(message, lang)
+    elif "website" in current_state.lower():
+        await state.clear()
+        await show_websites_menu(message, lang)
+    elif "keyword" in current_state.lower():
+        await state.clear()
+        await show_keywords_menu(message, lang)
+    elif "time" in current_state.lower():
+        await state.clear()
+        await show_schedules_menu(message, lang)
+    elif "token" in current_state.lower():
+        await state.clear()
+        await show_openai_menu(message, lang)
+    elif "prompt" in current_state.lower():
+        await state.clear()
+        await show_message_prompt_menu(message, lang)
+    elif "pass" in current_state.lower():
+        await state.clear()
+        await show_admin_menu(message, lang)
+    else:
+        await state.clear()
+        await show_admin_menu(message, lang)
 
 @router.message(F.text.in_([TEXTS['uz']['btn_exit_admin'], TEXTS['ru']['btn_exit_admin'], TEXTS['en']['btn_exit_admin']]))
 async def exit_admin(message: Message, state: FSMContext):
@@ -244,31 +320,20 @@ async def exit_admin(message: Message, state: FSMContext):
 async def ask_openai_token(message: Message, state: FSMContext):
     lang = get_user_lang(message.from_user.id)
     await state.set_state(AdminStates.awaiting_token)
-    token = db.get("openai_token")
-    status = f"Hozirgi: {token[:10]}...{token[-4:]}" if token else "Yo'q"
-    await message.answer(f"{TEXTS[lang]['msg_token_status']}{status}\n\n{TEXTS[lang]['msg_ask_token']}", reply_markup=get_back_kb(lang))
+    await show_openai_menu(message, lang)
 
 @router.message(AdminStates.awaiting_token)
 async def process_token(message: Message, state: FSMContext):
     lang = get_user_lang(message.from_user.id)
     db.set("openai_token", message.text.strip())
     await state.clear()
-    await message.answer(TEXTS[lang]['msg_token_saved'], reply_markup=get_admin_kb(lang))
+    await message.answer(TEXTS[lang]['msg_token_saved'])
+    await show_openai_menu(message, lang)
 
 @router.message(F.text.in_([TEXTS['uz']['btn_message_prompt'], TEXTS['ru']['btn_message_prompt'], TEXTS['en']['btn_message_prompt']]))
 async def ask_message_prompt(message: Message, state: FSMContext):
     lang = get_user_lang(message.from_user.id)
-    await state.set_state(AdminStates.awaiting_prompt)
-    prompt = db.get("message_prompt")
-    status = f"Hozirgi: {prompt}" if prompt else "Yo'q"
-    
-    builder = ReplyKeyboardBuilder()
-    builder.button(text=TEXTS[lang]['btn_add_msg_prompt'])
-    builder.button(text=TEXTS[lang]['btn_test_msg_prompt'])
-    builder.button(text=TEXTS[lang]['btn_back'])
-    builder.adjust(2)
-    
-    await message.answer(f"{TEXTS[lang]['msg_msg_prompt_status']}{status}\n\n{TEXTS[lang]['msg_ask_msg_prompt']}", reply_markup=builder.as_markup(resize_keyboard=True))
+    await show_message_prompt_menu(message, lang)
 
 @router.message(F.text.in_([TEXTS['uz']['btn_test_msg_prompt'], TEXTS['ru']['btn_test_msg_prompt'], TEXTS['en']['btn_test_msg_prompt']]))
 async def test_message_prompt(message: Message):
@@ -295,27 +360,25 @@ async def test_message_prompt(message: Message):
     ai_msg = await generate_openai_message(token, websites, keywords, prompt, all_content)
     await message.answer(ai_msg, parse_mode="HTML")
 
+@router.message(F.text.in_([TEXTS['uz']['btn_add_msg_prompt'], TEXTS['ru']['btn_add_msg_prompt'], TEXTS['en']['btn_add_msg_prompt']]))
+async def ask_new_prompt(message: Message, state: FSMContext):
+    lang = get_user_lang(message.from_user.id)
+    await state.set_state(AdminStates.awaiting_prompt)
+    await message.answer(TEXTS[lang]['msg_ask_msg_prompt'], reply_markup=get_back_kb(lang))
+
 @router.message(AdminStates.awaiting_prompt)
 async def process_prompt(message: Message, state: FSMContext):
     lang = get_user_lang(message.from_user.id)
     db.set("message_prompt", message.text.strip())
     await state.clear()
-    await message.answer(TEXTS[lang]['msg_msg_prompt_saved'], reply_markup=get_admin_kb(lang))
+    await message.answer(TEXTS[lang]['msg_msg_prompt_saved'])
+    await show_message_prompt_menu(message, lang)
 
 # --- Schedules ---
 @router.message(F.text.in_([TEXTS['uz']['btn_schedules'], TEXTS['ru']['btn_schedules'], TEXTS['en']['btn_schedules']]))
 async def list_schedules(message: Message):
     lang = get_user_lang(message.from_user.id)
-    schedules = db.get("schedules", [])
-    text = TEXTS[lang]['msg_schedules_list'] + "\n\n"
-    text += "\n".join(schedules) if schedules else "Yo'q"
-    
-    builder = ReplyKeyboardBuilder()
-    builder.button(text=TEXTS[lang]['btn_add_time'])
-    builder.button(text=TEXTS[lang]['btn_delete_time'])
-    builder.button(text=TEXTS[lang]['btn_back'])
-    builder.adjust(2)
-    await message.answer(text, reply_markup=builder.as_markup(resize_keyboard=True))
+    await show_schedules_menu(message, lang)
 
 @router.message(F.text.in_([TEXTS['uz']['btn_add_time'], TEXTS['ru']['btn_add_time'], TEXTS['en']['btn_add_time']]))
 async def ask_time_add(message: Message, state: FSMContext):
@@ -339,22 +402,14 @@ async def process_time_add(message: Message, state: FSMContext):
         db.set("schedules", schedules)
     
     await state.clear()
-    await message.answer(TEXTS[lang]['msg_time_added'], reply_markup=get_admin_kb(lang))
+    await message.answer(TEXTS[lang]['msg_time_added'])
+    await show_schedules_menu(message, lang)
 
 # --- Keywords ---
 @router.message(F.text.in_([TEXTS['uz']['btn_keywords'], TEXTS['ru']['btn_keywords'], TEXTS['en']['btn_keywords']]))
 async def list_keywords(message: Message):
     lang = get_user_lang(message.from_user.id)
-    keywords = db.get("keywords", [])
-    text = TEXTS[lang]['msg_keywords_list'] + "\n\n"
-    text += "\n".join([f"• {k}" for k in keywords]) if keywords else "Yo'q"
-    
-    builder = ReplyKeyboardBuilder()
-    builder.button(text=TEXTS[lang]['btn_add_keyword'])
-    builder.button(text=TEXTS[lang]['btn_delete_keyword'])
-    builder.button(text=TEXTS[lang]['btn_back'])
-    builder.adjust(2)
-    await message.answer(text, reply_markup=builder.as_markup(resize_keyboard=True))
+    await show_keywords_menu(message, lang)
 
 @router.message(F.text.in_([TEXTS['uz']['btn_add_keyword'], TEXTS['ru']['btn_add_keyword'], TEXTS['en']['btn_add_keyword']]))
 async def ask_keyword_add(message: Message, state: FSMContext):
@@ -370,7 +425,8 @@ async def process_keyword_add(message: Message, state: FSMContext):
         keywords.append(message.text.strip())
         db.set("keywords", keywords)
     await state.clear()
-    await message.answer(TEXTS[lang]['msg_keyword_added'], reply_markup=get_admin_kb(lang))
+    await message.answer(TEXTS[lang]['msg_keyword_added'])
+    await show_keywords_menu(message, lang)
 
 # --- Deletion Handlers ---
 @router.message(F.text.in_([TEXTS['uz']['btn_delete_channel'], TEXTS['ru']['btn_delete_channel'], TEXTS['en']['btn_delete_channel']]))
@@ -387,9 +443,10 @@ async def process_channel_delete(message: Message, state: FSMContext):
         channels.remove(message.text)
         db.set("channels", channels)
         await state.clear()
-        await message.answer(TEXTS[lang]['msg_channel_deleted'], reply_markup=get_admin_kb(lang))
+        await message.answer(TEXTS[lang]['msg_channel_deleted'])
     else:
         await message.answer(TEXTS[lang]['msg_channel_not_found'])
+    await show_channels_menu(message, lang)
 
 @router.message(F.text.in_([TEXTS['uz']['btn_delete_time'], TEXTS['ru']['btn_delete_time'], TEXTS['en']['btn_delete_time']]))
 async def ask_time_delete(message: Message, state: FSMContext):
@@ -405,9 +462,10 @@ async def process_time_delete(message: Message, state: FSMContext):
         schedules.remove(message.text)
         db.set("schedules", schedules)
         await state.clear()
-        await message.answer(TEXTS[lang]['msg_time_deleted'], reply_markup=get_admin_kb(lang))
+        await message.answer(TEXTS[lang]['msg_time_deleted'])
     else:
         await message.answer(TEXTS[lang]['msg_time_not_found'])
+    await show_schedules_menu(message, lang)
 
 @router.message(F.text.in_([TEXTS['uz']['btn_delete_website'], TEXTS['ru']['btn_delete_website'], TEXTS['en']['btn_delete_website']]))
 async def ask_website_delete(message: Message, state: FSMContext):
@@ -423,9 +481,10 @@ async def process_website_delete(message: Message, state: FSMContext):
     if len(new_websites) < len(websites):
         db.set("websites", new_websites)
         await state.clear()
-        await message.answer(TEXTS[lang]['msg_website_deleted'], reply_markup=get_admin_kb(lang))
+        await message.answer(TEXTS[lang]['msg_website_deleted'])
     else:
         await message.answer(TEXTS[lang]['msg_website_not_found'])
+    await show_websites_menu(message, lang)
 
 @router.message(F.text.in_([TEXTS['uz']['btn_delete_keyword'], TEXTS['ru']['btn_delete_keyword'], TEXTS['en']['btn_delete_keyword']]))
 async def ask_keyword_delete(message: Message, state: FSMContext):
@@ -441,6 +500,7 @@ async def process_keyword_delete(message: Message, state: FSMContext):
         keywords.remove(message.text)
         db.set("keywords", keywords)
         await state.clear()
-        await message.answer(TEXTS[lang]['msg_keyword_deleted'], reply_markup=get_admin_kb(lang))
+        await message.answer(TEXTS[lang]['msg_keyword_deleted'])
     else:
         await message.answer(TEXTS[lang]['msg_keyword_not_found'])
+    await show_keywords_menu(message, lang)

@@ -10,6 +10,111 @@ async function getAdminPassword(env) {
     return "Fotixbek1!";
 }
 
+// Helper functions for showing menus (for hierarchical navigation)
+async function showAdminMenu(ctx, lang) {
+    await ctx.reply(TEXTS[lang].msg_admin_menu, Markup.keyboard([
+        [TEXTS[lang].btn_channels, TEXTS[lang].btn_schedules],
+        [TEXTS[lang].btn_websites, TEXTS[lang].btn_keywords],
+        [TEXTS[lang].btn_openai_token, TEXTS[lang].btn_message_prompt],
+        [TEXTS[lang].btn_change_password, TEXTS[lang].btn_exit_admin]
+    ]).resize());
+}
+
+async function showChannelsMenu(ctx, lang) {
+    let channelsData = "[]";
+    if (ctx.env && ctx.env.CHANNELS_DB) {
+        channelsData = await ctx.env.CHANNELS_DB.get("channels") || "[]";
+    }
+    const channels = JSON.parse(channelsData);
+    
+    let listText = TEXTS[lang].msg_channels_list + "\n\n";
+    if(channels.length === 0) listText += (lang === 'uz' ? "Hozircha bazada kanallar yo'q." : lang === 'ru' ? "В базе пока нет каналов." : "No channels in database yet.");
+    else listText += channels.join('\n');
+
+    await ctx.reply(listText, Markup.keyboard([[TEXTS[lang].btn_add_channel], [TEXTS[lang].btn_delete_channel], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+}
+
+async function showSchedulesMenu(ctx, lang) {
+    let schedulesData = '[]';
+    if (ctx.env && ctx.env.CHANNELS_DB) {
+        schedulesData = await ctx.env.CHANNELS_DB.get("schedules") || schedulesData;
+    }
+    const schedules = JSON.parse(schedulesData);
+    
+    let listText = TEXTS[lang].msg_schedules_list + "\n\n";
+    if(schedules.length === 0) listText += (lang === 'uz' ? "Hozircha bazada vaqtlar yo'q." : lang === 'ru' ? "В базе пока нет времени." : "No schedules in database yet.");
+    else listText += schedules.join('\n');
+
+    await ctx.reply(listText, Markup.keyboard([[TEXTS[lang].btn_add_time], [TEXTS[lang].btn_delete_time], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+}
+
+async function showWebsitesMenu(ctx, lang) {
+    let websitesData = "[]";
+    if (ctx.env && ctx.env.CHANNELS_DB) {
+        websitesData = await ctx.env.CHANNELS_DB.get("websites") || "[]";
+    }
+    const websites = JSON.parse(websitesData);
+    
+    let listText = TEXTS[lang].msg_websites_list + "\n\n";
+    if(websites.length === 0) listText += (lang === 'uz' ? "Hozircha bazada web saytlar yo'q." : lang === 'ru' ? "В базе пока нет веб-сайтов." : "No websites in database yet.");
+    else {
+        listText += websites.map(ws => {
+            const url = typeof ws === 'object' ? ws.url : ws;
+            const hasCookie = typeof ws === 'object' && ws.cookie ? (lang === 'uz' ? "✅ Cookie bor" : "✅ Cookie есть") : (lang === 'uz' ? "❌ Cookie yo'q" : "❌ Cookie нет");
+            return `🌐 ${url}\n   └ ${hasCookie}`;
+        }).join('\n\n');
+    }
+
+    await ctx.reply(listText, Markup.keyboard([[TEXTS[lang].btn_add_website], [TEXTS[lang].btn_delete_website], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+}
+
+async function showKeywordsMenu(ctx, lang) {
+    let keywordsData = "[]";
+    if (ctx.env && ctx.env.CHANNELS_DB) {
+        keywordsData = await ctx.env.CHANNELS_DB.get("keywords") || "[]";
+    }
+    const keywords = JSON.parse(keywordsData);
+    
+    let listText = TEXTS[lang].msg_keywords_list + "\n\n";
+    if(keywords.length === 0) listText += (lang === 'uz' ? "Hozircha bazada qidiruv so'zlari yo'q." : lang === 'ru' ? "В базе пока нет ключевых слов." : "No keywords in database yet.");
+    else listText += keywords.map(k => "• " + k).join('\n');
+
+    await ctx.reply(listText, Markup.keyboard([[TEXTS[lang].btn_add_keyword], [TEXTS[lang].btn_delete_keyword], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+}
+
+async function showOpenAITokenMenu(ctx, lang) {
+    let currentToken = null;
+    if (ctx.env && ctx.env.CHANNELS_DB) {
+        currentToken = await ctx.env.CHANNELS_DB.get("openai_token");
+    }
+    
+    let statusText = TEXTS[lang].msg_token_status;
+    if (currentToken) {
+        const masked = currentToken.slice(0, 8) + '...' + currentToken.slice(-4);
+        statusText += `✅ ${masked}`;
+    } else {
+        statusText += (lang === 'uz' ? "❌ Token kiritilmagan" : "❌ Токен не введен");
+    }
+
+    await ctx.reply(statusText, Markup.keyboard([[TEXTS[lang].btn_add_token], [TEXTS[lang].btn_delete_token], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+}
+
+async function showMessagePromptMenu(ctx, lang) {
+    let currentPrompt = null;
+    if (ctx.env && ctx.env.CHANNELS_DB) {
+        currentPrompt = await ctx.env.CHANNELS_DB.get("message_prompt");
+    }
+    
+    let statusText = TEXTS[lang].msg_msg_prompt_status;
+    if (currentPrompt) {
+        statusText += currentPrompt;
+    } else {
+        statusText += (lang === 'uz' ? "❌ Promt kiritilmagan" : "❌ Промпт не введен");
+    }
+
+    await ctx.reply(statusText, Markup.keyboard([[TEXTS[lang].btn_add_msg_prompt], [TEXTS[lang].btn_del_msg_prompt], [TEXTS[lang].btn_test_msg_prompt], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+}
+
 export function setupAdminHandlers(bot) {
     // Middleware to catch state-driven texts (Password, Add Channel, Delete Channel, Back button)
     bot.use(async (ctx, next) => {
@@ -32,19 +137,41 @@ export function setupAdminHandlers(bot) {
             }
         }
 
+        // Robust back button check (all languages)
+        const allBackButtons = [TEXTS.uz.btn_back, TEXTS.ru.btn_back, TEXTS.en.btn_back];
+        
         // Handle back button
-        if (text === TEXTS[lang].btn_back) {
-            setUserState(ctx.from.id, null);
+        if (allBackButtons.includes(text)) {
+            // Hierarchical navigation logic
             if (stateName === 'AWAITING_PASSWORD') {
+                setUserState(ctx.from.id, null);
                 const { getMainMenu } = await import('../keyboards/reply.js');
                 await ctx.reply(TEXTS[lang].main_menu, getMainMenu(lang));
+            } else if (stateName && stateName.includes('CHANNEL')) {
+                setUserState(ctx.from.id, null);
+                await showChannelsMenu(ctx, lang);
+            } else if (stateName && stateName.includes('WEBSITE')) {
+                setUserState(ctx.from.id, null);
+                await showWebsitesMenu(ctx, lang);
+            } else if (stateName && stateName.includes('KEYWORD')) {
+                setUserState(ctx.from.id, null);
+                await showKeywordsMenu(ctx, lang);
+            } else if (stateName && stateName.includes('TIME')) {
+                setUserState(ctx.from.id, null);
+                await showSchedulesMenu(ctx, lang);
+            } else if (stateName && stateName.includes('OPENAI_TOKEN')) {
+                setUserState(ctx.from.id, null);
+                await showOpenAITokenMenu(ctx, lang);
+            } else if (stateName && stateName.includes('MESSAGE_PROMPT')) {
+                setUserState(ctx.from.id, null);
+                await showMessagePromptMenu(ctx, lang);
+            } else if (stateName && stateName.includes('PASSWORD')) { // Change password states
+                setUserState(ctx.from.id, null);
+                await showAdminMenu(ctx, lang);
             } else {
-                await ctx.reply(TEXTS[lang].msg_admin_menu, Markup.keyboard([
-                    [TEXTS[lang].btn_channels, TEXTS[lang].btn_schedules],
-                    [TEXTS[lang].btn_websites, TEXTS[lang].btn_keywords],
-                    [TEXTS[lang].btn_openai_token, TEXTS[lang].btn_message_prompt],
-                    [TEXTS[lang].btn_change_password, TEXTS[lang].btn_exit_admin]
-                ]).resize());
+                // If no specific state or viewing a sub-menu list, go back to Admin Menu
+                setUserState(ctx.from.id, null);
+                await showAdminMenu(ctx, lang);
             }
             return;
         }
@@ -54,12 +181,7 @@ export function setupAdminHandlers(bot) {
             const currentPass = await getAdminPassword(ctx.env);
 
             if (text === currentPass) {
-                await ctx.reply(TEXTS[lang].msg_admin_menu, Markup.keyboard([
-                    [TEXTS[lang].btn_channels, TEXTS[lang].btn_schedules],
-                    [TEXTS[lang].btn_websites, TEXTS[lang].btn_keywords],
-                    [TEXTS[lang].btn_openai_token, TEXTS[lang].btn_message_prompt],
-                    [TEXTS[lang].btn_change_password, TEXTS[lang].btn_exit_admin]
-                ]).resize());
+                await showAdminMenu(ctx, lang);
             } else {
                 const { getMainMenu } = await import('../keyboards/reply.js');
                 await ctx.reply(TEXTS[lang].msg_wrong_password, getMainMenu(lang));
@@ -74,12 +196,8 @@ export function setupAdminHandlers(bot) {
                 await ctx.reply(TEXTS[lang].msg_ask_new_password, { parse_mode: 'HTML' });
             } else {
                 setUserState(ctx.from.id, null);
-                await ctx.reply(TEXTS[lang].msg_password_mismatch, Markup.keyboard([
-                    [TEXTS[lang].btn_channels, TEXTS[lang].btn_schedules],
-                    [TEXTS[lang].btn_websites, TEXTS[lang].btn_keywords],
-                    [TEXTS[lang].btn_openai_token, TEXTS[lang].btn_message_prompt],
-                    [TEXTS[lang].btn_change_password, TEXTS[lang].btn_exit_admin]
-                ]).resize());
+                await ctx.reply(TEXTS[lang].msg_password_mismatch);
+                await showAdminMenu(ctx, lang);
             }
             return;
         }
@@ -97,19 +215,11 @@ export function setupAdminHandlers(bot) {
                 if (ctx.env && ctx.env.CHANNELS_DB) {
                     await ctx.env.CHANNELS_DB.put("admin_password", text);
                 }
-                await ctx.reply(TEXTS[lang].msg_password_changed, Markup.keyboard([
-                    [TEXTS[lang].btn_channels, TEXTS[lang].btn_schedules],
-                    [TEXTS[lang].btn_websites, TEXTS[lang].btn_keywords],
-                    [TEXTS[lang].btn_openai_token, TEXTS[lang].btn_message_prompt],
-                    [TEXTS[lang].btn_change_password, TEXTS[lang].btn_exit_admin]
-                ]).resize());
+                await ctx.reply(TEXTS[lang].msg_password_changed);
+                await showAdminMenu(ctx, lang);
             } else {
-                await ctx.reply(TEXTS[lang].msg_password_mismatch, Markup.keyboard([
-                    [TEXTS[lang].btn_channels, TEXTS[lang].btn_schedules],
-                    [TEXTS[lang].btn_websites, TEXTS[lang].btn_keywords],
-                    [TEXTS[lang].btn_openai_token, TEXTS[lang].btn_message_prompt],
-                    [TEXTS[lang].btn_change_password, TEXTS[lang].btn_exit_admin]
-                ]).resize());
+                await ctx.reply(TEXTS[lang].msg_password_mismatch);
+                await showAdminMenu(ctx, lang);
             }
             return;
         }
@@ -121,12 +231,8 @@ export function setupAdminHandlers(bot) {
                 await ctx.env.CHANNELS_DB.put("message_prompt", text);
             }
             
-            await ctx.reply(TEXTS[lang].msg_msg_prompt_saved, Markup.keyboard([
-                [TEXTS[lang].btn_channels, TEXTS[lang].btn_schedules],
-                [TEXTS[lang].btn_websites, TEXTS[lang].btn_keywords],
-                [TEXTS[lang].btn_openai_token, TEXTS[lang].btn_message_prompt],
-                [TEXTS[lang].btn_change_password, TEXTS[lang].btn_exit_admin]
-            ]).resize());
+            await ctx.reply(TEXTS[lang].msg_msg_prompt_saved);
+            await showMessagePromptMenu(ctx, lang);
             return;
         }
 
@@ -136,14 +242,11 @@ export function setupAdminHandlers(bot) {
             if (ctx.env && ctx.env.CHANNELS_DB) {
                 await ctx.env.CHANNELS_DB.delete("message_prompt");
             }
-            await ctx.reply(TEXTS[lang].msg_msg_prompt_deleted, Markup.keyboard([
-                [TEXTS[lang].btn_channels, TEXTS[lang].btn_schedules],
-                [TEXTS[lang].btn_websites, TEXTS[lang].btn_keywords],
-                [TEXTS[lang].btn_openai_token, TEXTS[lang].btn_message_prompt],
-                [TEXTS[lang].btn_change_password, TEXTS[lang].btn_exit_admin]
-            ]).resize());
+            await ctx.reply(TEXTS[lang].msg_msg_prompt_deleted);
+            await showMessagePromptMenu(ctx, lang);
             return;
         }
+
         if (stateName === 'AWAITING_OPENAI_TOKEN') {
             setUserState(ctx.from.id, null);
             
@@ -151,11 +254,8 @@ export function setupAdminHandlers(bot) {
                 await ctx.env.CHANNELS_DB.put("openai_token", text);
             }
             
-            await ctx.reply(TEXTS[lang].msg_token_saved, Markup.keyboard([
-                [TEXTS[lang].btn_channels, TEXTS[lang].btn_schedules],
-                [TEXTS[lang].btn_openai_token, TEXTS[lang].btn_message_prompt],
-                [TEXTS[lang].btn_change_password, TEXTS[lang].btn_exit_admin]
-            ]).resize());
+            await ctx.reply(TEXTS[lang].msg_token_saved);
+            await showOpenAITokenMenu(ctx, lang);
             return;
         }
 
@@ -166,7 +266,8 @@ export function setupAdminHandlers(bot) {
             // Validate HH:MM format
             const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
             if (!timeRegex.test(text)) {
-                await ctx.reply(TEXTS[lang].msg_invalid_time_format, Markup.keyboard([[TEXTS[lang].btn_add_time], [TEXTS[lang].btn_delete_time], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+                await ctx.reply(TEXTS[lang].msg_invalid_time_format);
+                await showSchedulesMenu(ctx, lang);
                 return;
             }
 
@@ -184,7 +285,8 @@ export function setupAdminHandlers(bot) {
                 }
             }
             
-            await ctx.reply(TEXTS[lang].msg_time_added, Markup.keyboard([[TEXTS[lang].btn_add_time], [TEXTS[lang].btn_delete_time], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+            await ctx.reply(TEXTS[lang].msg_time_added);
+            await showSchedulesMenu(ctx, lang);
             return;
         }
 
@@ -202,10 +304,11 @@ export function setupAdminHandlers(bot) {
                 if (ctx.env && ctx.env.CHANNELS_DB) {
                     await ctx.env.CHANNELS_DB.put("schedules", JSON.stringify(schedules));
                 }
-                await ctx.reply(TEXTS[lang].msg_time_deleted, Markup.keyboard([[TEXTS[lang].btn_add_time], [TEXTS[lang].btn_delete_time], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+                await ctx.reply(TEXTS[lang].msg_time_deleted);
             } else {
-                await ctx.reply(TEXTS[lang].msg_time_not_found, Markup.keyboard([[TEXTS[lang].btn_add_time], [TEXTS[lang].btn_delete_time], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+                await ctx.reply(TEXTS[lang].msg_time_not_found);
             }
+            await showSchedulesMenu(ctx, lang);
             return;
         }
 
@@ -250,7 +353,8 @@ export function setupAdminHandlers(bot) {
                 await ctx.env.CHANNELS_DB.put("websites", JSON.stringify(websites));
             }
             
-            await ctx.reply(TEXTS[lang].msg_website_added, Markup.keyboard([[TEXTS[lang].btn_add_website], [TEXTS[lang].btn_delete_website], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+            await ctx.reply(TEXTS[lang].msg_website_added);
+            await showWebsitesMenu(ctx, lang);
             return;
         }
 
@@ -273,10 +377,11 @@ export function setupAdminHandlers(bot) {
                 if (ctx.env && ctx.env.CHANNELS_DB) {
                     await ctx.env.CHANNELS_DB.put("websites", JSON.stringify(websites));
                 }
-                await ctx.reply(TEXTS[lang].msg_website_deleted, Markup.keyboard([[TEXTS[lang].btn_add_website], [TEXTS[lang].btn_delete_website], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+                await ctx.reply(TEXTS[lang].msg_website_deleted);
             } else {
-                await ctx.reply(TEXTS[lang].msg_website_not_found, Markup.keyboard([[TEXTS[lang].btn_add_website], [TEXTS[lang].btn_delete_website], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+                await ctx.reply(TEXTS[lang].msg_website_not_found);
             }
+            await showWebsitesMenu(ctx, lang);
             return;
         }
 
@@ -296,7 +401,8 @@ export function setupAdminHandlers(bot) {
                 }
             }
             
-            await ctx.reply(TEXTS[lang].msg_keyword_added, Markup.keyboard([[TEXTS[lang].btn_add_keyword], [TEXTS[lang].btn_delete_keyword], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+            await ctx.reply(TEXTS[lang].msg_keyword_added);
+            await showKeywordsMenu(ctx, lang);
             return;
         }
 
@@ -314,12 +420,14 @@ export function setupAdminHandlers(bot) {
                 if (ctx.env && ctx.env.CHANNELS_DB) {
                     await ctx.env.CHANNELS_DB.put("keywords", JSON.stringify(keywords));
                 }
-                await ctx.reply(TEXTS[lang].msg_keyword_deleted, Markup.keyboard([[TEXTS[lang].btn_add_keyword], [TEXTS[lang].btn_delete_keyword], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+                await ctx.reply(TEXTS[lang].msg_keyword_deleted);
             } else {
-                await ctx.reply(TEXTS[lang].msg_keyword_not_found, Markup.keyboard([[TEXTS[lang].btn_add_keyword], [TEXTS[lang].btn_delete_keyword], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+                await ctx.reply(TEXTS[lang].msg_keyword_not_found);
             }
+            await showKeywordsMenu(ctx, lang);
             return;
         }
+
         if (stateName === 'AWAITING_CHANNEL') {
             setUserState(ctx.from.id, null);
             
@@ -328,7 +436,8 @@ export function setupAdminHandlers(bot) {
                 await ctx.telegram.sendMessage(text, "Salom men bugundan boshlab sizlarga malumotlar jonataman !");
             } catch (err) {
                 console.error("Channel verify error:", err);
-                await ctx.reply(TEXTS[lang].msg_channel_verify_error, Markup.keyboard([[TEXTS[lang].btn_add_channel], [TEXTS[lang].btn_delete_channel], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+                await ctx.reply(TEXTS[lang].msg_channel_verify_error);
+                await showChannelsMenu(ctx, lang);
                 return;
             }
 
@@ -346,7 +455,8 @@ export function setupAdminHandlers(bot) {
                 }
             }
             
-            await ctx.reply(TEXTS[lang].msg_channel_added, Markup.keyboard([[TEXTS[lang].btn_add_channel], [TEXTS[lang].btn_delete_channel], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+            await ctx.reply(TEXTS[lang].msg_channel_added);
+            await showChannelsMenu(ctx, lang);
             return; // State Handled
         }
 
@@ -364,10 +474,11 @@ export function setupAdminHandlers(bot) {
                 if (ctx.env && ctx.env.CHANNELS_DB) {
                     await ctx.env.CHANNELS_DB.put("channels", JSON.stringify(channels));
                 }
-                await ctx.reply(TEXTS[lang].msg_channel_deleted, Markup.keyboard([[TEXTS[lang].btn_add_channel], [TEXTS[lang].btn_delete_channel], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+                await ctx.reply(TEXTS[lang].msg_channel_deleted);
             } else {
-                await ctx.reply(TEXTS[lang].msg_channel_not_found, Markup.keyboard([[TEXTS[lang].btn_add_channel], [TEXTS[lang].btn_delete_channel], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+                await ctx.reply(TEXTS[lang].msg_channel_not_found);
             }
+            await showChannelsMenu(ctx, lang);
             return; // State Handled
         }
 
@@ -395,24 +506,7 @@ export function setupAdminHandlers(bot) {
     const websiteBtns = [TEXTS.uz.btn_websites, TEXTS.ru.btn_websites, TEXTS.en.btn_websites];
     bot.hears(websiteBtns, async (ctx) => {
         const lang = getUserLang(ctx.from.id);
-        
-        let websitesData = "[]";
-        if (ctx.env && ctx.env.CHANNELS_DB) {
-            websitesData = await ctx.env.CHANNELS_DB.get("websites") || "[]";
-        }
-        const websites = JSON.parse(websitesData);
-        
-        let listText = TEXTS[lang].msg_websites_list + "\n\n";
-        if(websites.length === 0) listText += "Hozircha bazada web saytlar yo'q.";
-        else {
-            listText += websites.map(ws => {
-                const url = typeof ws === 'object' ? ws.url : ws;
-                const hasCookie = typeof ws === 'object' && ws.cookie ? "✅ Cookie bor" : "❌ Cookie yo'q";
-                return `🌐 ${url}\n   └ ${hasCookie}`;
-            }).join('\n\n');
-        }
-
-        await ctx.reply(listText, Markup.keyboard([[TEXTS[lang].btn_add_website], [TEXTS[lang].btn_delete_website], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+        await showWebsitesMenu(ctx, lang);
     });
 
     const addWebsiteBtns = [TEXTS.uz.btn_add_website, TEXTS.ru.btn_add_website, TEXTS.en.btn_add_website];
@@ -432,18 +526,7 @@ export function setupAdminHandlers(bot) {
     const keywordBtns = [TEXTS.uz.btn_keywords, TEXTS.ru.btn_keywords, TEXTS.en.btn_keywords];
     bot.hears(keywordBtns, async (ctx) => {
         const lang = getUserLang(ctx.from.id);
-        
-        let keywordsData = "[]";
-        if (ctx.env && ctx.env.CHANNELS_DB) {
-            keywordsData = await ctx.env.CHANNELS_DB.get("keywords") || "[]";
-        }
-        const keywords = JSON.parse(keywordsData);
-        
-        let listText = TEXTS[lang].msg_keywords_list + "\n\n";
-        if(keywords.length === 0) listText += "Hozircha bazada qidiruv so'zlari yo'q.";
-        else listText += keywords.map(k => "• " + k).join('\n');
-
-        await ctx.reply(listText, Markup.keyboard([[TEXTS[lang].btn_add_keyword], [TEXTS[lang].btn_delete_keyword], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+        await showKeywordsMenu(ctx, lang);
     });
 
     const addKeywordBtns = [TEXTS.uz.btn_add_keyword, TEXTS.ru.btn_add_keyword, TEXTS.en.btn_add_keyword];
@@ -459,21 +542,11 @@ export function setupAdminHandlers(bot) {
         setUserState(ctx.from.id, 'AWAITING_KEYWORD_DELETE');
         await ctx.reply(TEXTS[lang].msg_delete_keyword, Markup.keyboard([[TEXTS[lang].btn_back]]).resize());
     });
+
     const channelBtns = [TEXTS.uz.btn_channels, TEXTS.ru.btn_channels, TEXTS.en.btn_channels];
     bot.hears(channelBtns, async (ctx) => {
         const lang = getUserLang(ctx.from.id);
-        
-        let channelsData = "[]";
-        if (ctx.env && ctx.env.CHANNELS_DB) {
-            channelsData = await ctx.env.CHANNELS_DB.get("channels") || "[]";
-        }
-        const channels = JSON.parse(channelsData);
-        
-        let listText = TEXTS[lang].msg_channels_list + "\n\n";
-        if(channels.length === 0) listText += "Hozircha bazada kanallar yo'q.";
-        else listText += channels.join('\n');
-
-        await ctx.reply(listText, Markup.keyboard([[TEXTS[lang].btn_add_channel], [TEXTS[lang].btn_delete_channel], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+        await showChannelsMenu(ctx, lang);
     });
 
     const addChannelBtns = [TEXTS.uz.btn_add_channel, TEXTS.ru.btn_add_channel, TEXTS.en.btn_add_channel];
@@ -493,18 +566,7 @@ export function setupAdminHandlers(bot) {
     const scheduleBtns = [TEXTS.uz.btn_schedules, TEXTS.ru.btn_schedules, TEXTS.en.btn_schedules];
     bot.hears(scheduleBtns, async (ctx) => {
         const lang = getUserLang(ctx.from.id);
-        
-        let schedulesData = '[]';
-        if (ctx.env && ctx.env.CHANNELS_DB) {
-            schedulesData = await ctx.env.CHANNELS_DB.get("schedules") || schedulesData;
-        }
-        const schedules = JSON.parse(schedulesData);
-        
-        let listText = TEXTS[lang].msg_schedules_list + "\n\n";
-        if(schedules.length === 0) listText += "Hozircha bazada vaqtlar yo'q.";
-        else listText += schedules.join('\n');
-
-        await ctx.reply(listText, Markup.keyboard([[TEXTS[lang].btn_add_time], [TEXTS[lang].btn_delete_time], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+        await showSchedulesMenu(ctx, lang);
     });
 
     const addTimeBtns = [TEXTS.uz.btn_add_time, TEXTS.ru.btn_add_time, TEXTS.en.btn_add_time];
@@ -525,20 +587,7 @@ export function setupAdminHandlers(bot) {
     const messagePromptBtns = [TEXTS.uz.btn_message_prompt, TEXTS.ru.btn_message_prompt, TEXTS.en.btn_message_prompt];
     bot.hears(messagePromptBtns, async (ctx) => {
         const lang = getUserLang(ctx.from.id);
-        
-        let currentPrompt = null;
-        if (ctx.env && ctx.env.CHANNELS_DB) {
-            currentPrompt = await ctx.env.CHANNELS_DB.get("message_prompt");
-        }
-        
-        let statusText = TEXTS[lang].msg_msg_prompt_status;
-        if (currentPrompt) {
-            statusText += currentPrompt;
-        } else {
-            statusText += "❌ Promt kiritilmagan";
-        }
-
-        await ctx.reply(statusText, Markup.keyboard([[TEXTS[lang].btn_add_msg_prompt], [TEXTS[lang].btn_del_msg_prompt], [TEXTS[lang].btn_test_msg_prompt], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+        await showMessagePromptMenu(ctx, lang);
     });
 
     const addMsgPromptBtns = [TEXTS.uz.btn_add_msg_prompt, TEXTS.ru.btn_add_msg_prompt, TEXTS.en.btn_add_msg_prompt];
@@ -554,12 +603,8 @@ export function setupAdminHandlers(bot) {
         if (ctx.env && ctx.env.CHANNELS_DB) {
             await ctx.env.CHANNELS_DB.delete("message_prompt");
         }
-        await ctx.reply(TEXTS[lang].msg_msg_prompt_deleted, Markup.keyboard([
-            [TEXTS[lang].btn_channels, TEXTS[lang].btn_schedules],
-            [TEXTS[lang].btn_websites, TEXTS[lang].btn_keywords],
-            [TEXTS[lang].btn_openai_token, TEXTS[lang].btn_message_prompt],
-            [TEXTS[lang].btn_change_password, TEXTS[lang].btn_exit_admin]
-        ]).resize());
+        await ctx.reply(TEXTS[lang].msg_msg_prompt_deleted);
+        await showAdminMenu(ctx, lang);
     });
 
     const testMsgPromptBtns = [TEXTS.uz.btn_test_msg_prompt, TEXTS.ru.btn_test_msg_prompt, TEXTS.en.btn_test_msg_prompt];
@@ -608,24 +653,11 @@ export function setupAdminHandlers(bot) {
             await ctx.reply(TEXTS[lang].msg_test_error + "\n\n" + error.message, Markup.keyboard([[TEXTS[lang].btn_back]]).resize());
         }
     });
+
     const openaiBtns = [TEXTS.uz.btn_openai_token, TEXTS.ru.btn_openai_token, TEXTS.en.btn_openai_token];
     bot.hears(openaiBtns, async (ctx) => {
         const lang = getUserLang(ctx.from.id);
-        
-        let currentToken = null;
-        if (ctx.env && ctx.env.CHANNELS_DB) {
-            currentToken = await ctx.env.CHANNELS_DB.get("openai_token");
-        }
-        
-        let statusText = TEXTS[lang].msg_token_status;
-        if (currentToken) {
-            const masked = currentToken.slice(0, 8) + '...' + currentToken.slice(-4);
-            statusText += `✅ ${masked}`;
-        } else {
-            statusText += "❌ Token kiritilmagan";
-        }
-
-        await ctx.reply(statusText, Markup.keyboard([[TEXTS[lang].btn_add_token], [TEXTS[lang].btn_delete_token], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+        await showOpenAITokenMenu(ctx, lang);
     });
 
     const addTokenBtns = [TEXTS.uz.btn_add_token, TEXTS.ru.btn_add_token, TEXTS.en.btn_add_token];
@@ -641,11 +673,8 @@ export function setupAdminHandlers(bot) {
         if (ctx.env && ctx.env.CHANNELS_DB) {
             await ctx.env.CHANNELS_DB.delete("openai_token");
         }
-        await ctx.reply(TEXTS[lang].msg_token_deleted, Markup.keyboard([
-            [TEXTS[lang].btn_channels, TEXTS[lang].btn_schedules],
-            [TEXTS[lang].btn_openai_token, TEXTS[lang].btn_message_prompt],
-            [TEXTS[lang].btn_change_password, TEXTS[lang].btn_exit_admin]
-        ]).resize());
+        await ctx.reply(TEXTS[lang].msg_token_deleted);
+        await showAdminMenu(ctx, lang);
     });
 
 
