@@ -38,6 +38,24 @@ class AdminStates(StatesGroup):
     awaiting_new_pass = State()
     awaiting_confirm_pass = State()
 
+def get_admin_kb(lang):
+    builder = ReplyKeyboardBuilder()
+    builder.button(text=TEXTS[lang]['btn_channels'])
+    builder.button(text=TEXTS[lang]['btn_schedules'])
+    builder.button(text=TEXTS[lang]['btn_websites'])
+    builder.button(text=TEXTS[lang]['btn_keywords'])
+    builder.button(text=TEXTS[lang]['btn_openai_token'])
+    builder.button(text=TEXTS[lang]['btn_message_prompt'])
+    builder.button(text=TEXTS[lang]['btn_change_password'])
+    builder.button(text=TEXTS[lang]['btn_exit_admin'])
+    builder.adjust(2)
+    return builder.as_markup(resize_keyboard=True)
+
+def get_back_kb(lang):
+    builder = ReplyKeyboardBuilder()
+    builder.button(text=TEXTS[lang]['btn_back'])
+    return builder.as_markup(resize_keyboard=True)
+
 # Helper functions for showing menus (for hierarchical navigation)
 async def show_admin_menu(message: Message, lang: str):
     await message.answer(TEXTS[lang]['msg_admin_menu'], reply_markup=get_admin_kb(lang))
