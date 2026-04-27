@@ -100,19 +100,8 @@ async function showOpenAITokenMenu(ctx, lang) {
 }
 
 async function showMessagePromptMenu(ctx, lang) {
-    let currentPrompt = null;
-    if (ctx.env && ctx.env.CHANNELS_DB) {
-        currentPrompt = await ctx.env.CHANNELS_DB.get("message_prompt");
-    }
-    
-    let statusText = TEXTS[lang].msg_msg_prompt_status;
-    if (currentPrompt) {
-        statusText += currentPrompt;
-    } else {
-        statusText += (lang === 'uz' ? "❌ Promt kiritilmagan" : "❌ Промпт не введен");
-    }
-
-    await ctx.reply(statusText, Markup.keyboard([[TEXTS[lang].btn_add_msg_prompt], [TEXTS[lang].btn_del_msg_prompt], [TEXTS[lang].btn_test_msg_prompt], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
+    let statusText = (lang === 'uz' ? "✅ Promt tizimga qattiq kodlangan (Hardcoded).\n\nFaqat sinovdan o'tkazishingiz mumkin." : "✅ Промпт жестко закодирован в системе.\n\nВы можете только протестировать его.");
+    await ctx.reply(statusText, Markup.keyboard([[TEXTS[lang].btn_test_msg_prompt], [TEXTS[lang].btn_back, TEXTS[lang].btn_exit_admin]]).resize());
 }
 
 export function setupAdminHandlers(bot) {
@@ -614,10 +603,9 @@ export function setupAdminHandlers(bot) {
         if (!ctx.env || !ctx.env.CHANNELS_DB) return;
         
         const token = await ctx.env.CHANNELS_DB.get("openai_token");
-        const promptText = await ctx.env.CHANNELS_DB.get("message_prompt");
         
-        if (!token || !promptText) {
-            await ctx.reply("❌ OpenAI token yoki Xabar promti kiritilmagan!", Markup.keyboard([[TEXTS[lang].btn_back]]).resize());
+        if (!token) {
+            await ctx.reply("❌ OpenAI token kiritilmagan!", Markup.keyboard([[TEXTS[lang].btn_back]]).resize());
             return;
         }
 
@@ -639,7 +627,11 @@ export function setupAdminHandlers(bot) {
                     });
                     if (response.ok) {
                         const html = await response.text();
-                        const cleanText = html.replace(/<[^>]*>?/gm, ' ').replace(/\s\s+/g, ' ').substring(0, 3000);
+                        let cleanText = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ');
+                        cleanText = cleanText.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ');
+                        cleanText = cleanText.replace(/<!--[\s\S]*?-->/g, ' ');
+                        cleanText = cleanText.replace(/<[^>]*>?/gm, ' ').replace(/\s\s+/g, ' ').trim();
+                        cleanText = cleanText.substring(0, 15000);
                         allSitesContent += `\n--- SOURCE: ${url} ---\n${cleanText}\n`;
                     }
                 } catch (e) {
@@ -647,8 +639,53 @@ export function setupAdminHandlers(bot) {
                 }
             }
 
-            const aiResponse = await generateOpenAIMessage(token, websites, keywords, promptText, allSitesContent);
-            await ctx.reply(TEXTS[lang].msg_test_success + "\n\n" + aiResponse, { parse_mode: "HTML" });
+            const jsonResponse = await generateOpenAIMessage(token, websites, keywords, allSitesContent);
+            
+            let tenders = [];
+            try {
+                const parsed = JSON.parse(jsonResponse);
+                tenders = parsed.tenders || [];
+            } catch (e) {
+                await ctx.reply("JSON parse qilishda xatolik yuz berdi.\n" + jsonResponse);
+                return;
+            }
+
+            if (tenders.length === 0) {
+                await ctx.reply("Tender topilmadi.");
+                return;
+            }
+
+            for (const tender of tenders) {
+                const tenderMessage = `Товар (услуга): ${tender.product || ''}
+
+📁 Название закупки (услуги): ${tender.title || ''}
+
+🌍 Страна: ${tender.country || ''}
+
+📋 Тип: ${tender.type || ''}
+
+👤 Покупатель: ${tender.buyer || ''}
+
+🏛 Проект: ${tender.project || ''}
+
+🏦 Спонсор: ${tender.sponsor || ''}
+
+🗂 Номер тендера: ${tender.number || ''}
+
+🗓 Опубликовано: ${tender.published_date || ''}
+
+⏰ Дедлайн: ${tender.deadline || ''}
+
+📬 Вскрытие: ${tender.opening_date || ''}
+
+📌 Особые условия: ${tender.notes || ''}
+
+🔗 Ссылка: ${tender.link || ''}
+
+${tender.matched_keywords || ''}`;
+                await ctx.reply(tenderMessage, { parse_mode: "HTML" });
+            }
+            await ctx.reply(TEXTS[lang].msg_test_success, { parse_mode: "HTML" });
         } catch (error) {
             await ctx.reply(TEXTS[lang].msg_test_error + "\n\n" + error.message, Markup.keyboard([[TEXTS[lang].btn_back]]).resize());
         }

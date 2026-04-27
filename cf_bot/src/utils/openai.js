@@ -1,20 +1,33 @@
-export async function generateOpenAIMessage(token, websites, keywords, promptText, fetchedContent = "") {
+export async function generateOpenAIMessage(token, websites, keywords, fetchedContent = "") {
     if (!token) {
         throw new Error("OpenAI token is missing");
     }
 
-    const websitesStr = websites.length > 0 ? websites.map(w => typeof w === 'object' ? w.url : w).join(', ') : "Yo'q";
-    const keywordsStr = keywords.length > 0 ? keywords.join(', ') : "Yo'q";
+    const keywordsStr = keywords.length > 0 ? keywords.join(', ') : "yo'q";
 
-    const fullPrompt = `Siz professional tender monitoring AI tizimisiz.
-Quyida bir nechta manbalardan olingan matnlar berilgan. 
-Sizning vazifangiz: ushbu matnlar ichidan ${keywordsStr} kalit so'zlariga mos keladigan tenderlar, ko'rgazmalar yoki muhim yangiliklarni topish.
+    const systemInstruction = `Siz professional tender monitoring AI tizimisiz.
+Sizga web saytlardan olingan matnlar beriladi. Sizning vazifangiz: ushbu matnlar ichidan [${keywordsStr}] kalit so'zlaridan kamida bittasiga mos keladigan barcha tenderlar, ko'rgazmalar yoki muhim yangiliklarni topish.
+Har bir saytda nechta to'g'ri keladigan tender bo'lsa, barchasini alohida-alohida ajratib oling.
+Javob QAT'IY ravishda JSON array (ro'yxat) ko'rinishida bo'lishi shart. Har bir obyekt quyidagi kalitlarga ega bo'lsin:
+{
+  "product": "Товар (услуга) qisqa nom",
+  "title": "Название закупки (услуги) to'liq nom",
+  "country": "Страна (davlat)",
+  "type": "Тип (tender turi)",
+  "buyer": "Покупатель (tashkilot)",
+  "project": "Проект (loyiha)",
+  "sponsor": "Спонсор (agar bor bo'lsa, yo'qsa 'Noma\\'lum')",
+  "number": "Номер тендера (raqam)",
+  "published_date": "Опубликовано (sana)",
+  "deadline": "Дедлайн (muddat)",
+  "opening_date": "Вскрытие (agar bor bo'lsa, yo'qsa 'Noma\\'lum')",
+  "notes": "Особые условия (qisqa izoh)",
+  "link": "Ссылка (link)",
+  "matched_keywords": "Qaysi kalit so'zlarga to'g'ri kelgani (masalan: #mebel, #taxta)"
+}
+Agar hech narsa topilmasa, bo'sh array [] qaytaring.`;
 
-MANBALARDAN OLINGAN MATNLAR:
-${fetchedContent || "Matn olishning imkoni bo'lmadi, iltimos umumiy ma'lumot bering."}
-
-QO'SHIMCHA KO'RSATMA:
-${promptText}`;
+    const userPrompt = `MANBALARDAN OLINGAN MATNLAR:\n${fetchedContent || "Matn topilmadi."}`;
 
     try {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -25,14 +38,15 @@ ${promptText}`;
             },
             body: JSON.stringify({
                 model: 'gpt-4o',
+                response_format: { type: "json_object" }, // json_object expects a single object, so we wrap the array
                 messages: [
                     {
                         role: 'system',
-                        content: 'Siz professional assistentsiz. Quyidagi web saytlar va kalit so\'zlar orqali foydali va kerakli ma\'lumotni, xususan tender yoki yangiliklarni qidirib toping va xabar shaklida qaytaring.'
+                        content: systemInstruction + '\nIltimos, natijani quyidagi JSON obyekti ichiga "tenders" kaliti ostida joylang: { "tenders": [...] }'
                     },
                     {
                         role: 'user',
-                        content: fullPrompt
+                        content: userPrompt
                     }
                 ],
                 temperature: 0.7

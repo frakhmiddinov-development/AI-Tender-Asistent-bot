@@ -36,10 +36,8 @@ export async function handleScheduledEvent(bot, event, env) {
 
   try {
     const token = await env.CHANNELS_DB.get("openai_token");
-    const promptText = await env.CHANNELS_DB.get("message_prompt");
-
-    if (!token || !promptText) {
-        console.error("OpenAI token yoki Xabar promti kiritilmagan!");
+    if (!token) {
+        console.error("OpenAI token kiritilmagan!");
         return;
     }
 
@@ -102,22 +100,74 @@ export async function handleScheduledEvent(bot, event, env) {
         return;
     }
 
-    const aiMessage = await generateOpenAIMessage(token, websites, keywords, promptText, allSitesContent);
+    const jsonResponse = await generateOpenAIMessage(token, websites, keywords, allSitesContent);
     
-    // Matndan kelib chiqib qisqacha rasm promti yaratish va rasm generatsiya qilish
-    const imagePrompt = `A professional, high-quality, corporate-style image representing the following text. Do not include any words or text in the image. Topic: ${aiMessage.substring(0, 500)}`;
-    const imageUrl = await generateOpenAIImage(token, imagePrompt);
+    let tenders = [];
+    try {
+        const parsed = JSON.parse(jsonResponse);
+        tenders = parsed.tenders || [];
+    } catch (e) {
+        console.error("JSON parse qilishda xatolik:", e);
+        console.log("Qaytib kelgan xabar:", jsonResponse);
+        return;
+    }
 
-    for (const channelId of channels) {
-      if (imageUrl) {
-          // Rasmni caption bilan yuborish (Telegram caption limini hisobga olish kerak: 1024 belgi max)
-          // Lekin agar matn uzun bo'lsa, avval rasmni yuborib, keyin matnni alohida yuborish xavfsizroq
-          await bot.telegram.sendPhoto(channelId, imageUrl, { caption: "📸 Mavzuga oid tasvir" });
-          await bot.telegram.sendMessage(channelId, aiMessage, { parse_mode: "HTML" });
-      } else {
-          // Agar rasm generatsiya bo'lmasa, faqat matnni yuborish
-          await bot.telegram.sendMessage(channelId, aiMessage, { parse_mode: "HTML" });
-      }
+    if (tenders.length === 0) {
+        console.log("Tender topilmadi.");
+        return;
+    }
+
+    for (const tender of tenders) {
+        // Xabar matnini user so'ragan formatda tayyorlash
+        const tenderMessage = `Товар (услуга): ${tender.product || ''}
+
+📁 Название закупки (услуги): ${tender.title || ''}
+
+🌍 Страна: ${tender.country || ''}
+
+📋 Тип: ${tender.type || ''}
+
+👤 Покупатель: ${tender.buyer || ''}
+
+🏛 Проект: ${tender.project || ''}
+
+🏦 Спонсор: ${tender.sponsor || ''}
+
+🗂 Номер тендера: ${tender.number || ''}
+
+🗓 Опубликовано: ${tender.published_date || ''}
+
+⏰ Дедлайн: ${tender.deadline || ''}
+
+📬 Вскрытие: ${tender.opening_date || ''}
+
+📌 Особые условия: ${tender.notes || ''}
+
+🔗 Ссылка: ${tender.link || ''}
+
+${tender.matched_keywords || ''}`;
+
+        // Rasm yaratish
+        const imagePrompt = `A professional, high-quality, corporate-style image representing the following tender topic: ${tender.title}. Do not include any text.`;
+        const imageUrl = await generateOpenAIImage(token, imagePrompt);
+
+        // Kanallarga yuborish
+        for (const channelId of channels) {
+            try {
+                if (imageUrl) {
+                    await bot.telegram.sendPhoto(channelId, imageUrl, { caption: tenderMessage, parse_mode: "HTML" });
+                } else {
+                    await bot.telegram.sendMessage(channelId, tenderMessage, { parse_mode: "HTML" });
+                }
+            } catch (err) {
+                console.error(`Xabar yuborishda xatolik (${channelId}):`, err);
+                // Caption too long error handling
+                if (err.description && err.description.includes('caption is too long')) {
+                    await bot.telegram.sendPhoto(channelId, imageUrl, { caption: "📸 Mavzuga oid tasvir" });
+                    await bot.telegram.sendMessage(channelId, tenderMessage, { parse_mode: "HTML" });
+                }
+            }
+        }
     }
   } catch (error) {
     console.error("Xabar yuborishda xatolik:", error);
