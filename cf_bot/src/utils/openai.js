@@ -23,7 +23,7 @@ Javob QAT'IY ravishda JSON array (ro'yxat) ko'rinishida bo'lishi shart. Har bir 
   "opening_date": "Вскрытие (agar bor bo'lsa, yo'qsa 'Noma\\'lum')",
   "notes": "Особые условия (qisqa izoh)",
   "link": "Ссылка (link)",
-  "matched_keywords": "Qaysi kalit so'zlarga to'g'ri kelgani (masalan: #mebel, #taxta)"
+  "matched_keywords": "Qaysi kalit so'zlarga to'g'ri kelgani (topilgan kalit so'zlarni # bilan yozing)"
 }
 Agar hech narsa topilmasa, bo'sh array [] qaytaring.`;
 
