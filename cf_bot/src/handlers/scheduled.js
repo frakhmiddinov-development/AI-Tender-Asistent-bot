@@ -53,12 +53,30 @@ export async function handleScheduledEvent(bot, event, env) {
         const cookie = typeof site === 'object' ? site.cookie : "";
 
         try {
-            const response = await fetch(url, {
-                headers: {
-                    'Cookie': cookie,
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                }
-            });
+            let response;
+        
+            // --- ETENDER MAXSUS INTERCEPTOR ---
+            if (url.includes('etender.uzex.uz')) {
+                let typeId = url.includes('/lots/2') ? 2 : 1;
+                response = await fetch("https://apietender.uzex.uz/api/common/TradeList", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+                    body: JSON.stringify({
+                        TypeId: typeId,
+                        From: 1,
+                        To: 50,
+                        System_Id: 0,
+                        Keyword: ""
+                    })
+                });
+            } else {
+                response = await fetch(url, {
+                    headers: {
+                        'Cookie': cookie,
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    }
+                });
+            }
 
             if (!response.ok) {
                 if (response.status === 401 || response.status === 403) {
