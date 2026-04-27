@@ -71,8 +71,18 @@ export async function handleScheduledEvent(bot, event, env) {
             }
 
             const html = await response.text();
-            // Oddiygina matnni tozalash (HTML teglarni olib tashlash)
-            const cleanText = html.replace(/<[^>]*>?/gm, ' ').replace(/\s\s+/g, ' ').substring(0, 5000); // Har bir saytdan max 5000 belgi
+            
+            // Yaxshilangan tozalash: script, style va commentlarni to'liq olib tashlash
+            let cleanText = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ');
+            cleanText = cleanText.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ');
+            cleanText = cleanText.replace(/<!--[\s\S]*?-->/g, ' ');
+            
+            // Qolgan HTML teglarni olib tashlash va bo'shliqlarni tozalash
+            cleanText = cleanText.replace(/<[^>]*>?/gm, ' ').replace(/\s\s+/g, ' ').trim();
+            
+            // Yuzaki o'qimasligi uchun har bir saytdan olinadigan matn hajmini 3 barobarga oshiramiz (15000 belgi)
+            cleanText = cleanText.substring(0, 15000);
+            
             allSitesContent += `\n--- SOURCE: ${url} ---\n${cleanText}\n`;
 
         } catch (error) {
