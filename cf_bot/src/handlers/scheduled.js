@@ -1,4 +1,4 @@
-import { generateOpenAIMessage } from '../utils/openai.js';
+import { generateOpenAIMessage, generateOpenAIImage } from '../utils/openai.js';
 import { TEXTS } from '../utils/texts.js';
 
 /**
@@ -93,9 +93,21 @@ export async function handleScheduledEvent(bot, event, env) {
     }
 
     const aiMessage = await generateOpenAIMessage(token, websites, keywords, promptText, allSitesContent);
+    
+    // Matndan kelib chiqib qisqacha rasm promti yaratish va rasm generatsiya qilish
+    const imagePrompt = `A professional, high-quality, corporate-style image representing the following text. Do not include any words or text in the image. Topic: ${aiMessage.substring(0, 500)}`;
+    const imageUrl = await generateOpenAIImage(token, imagePrompt);
 
     for (const channelId of channels) {
-      await bot.telegram.sendMessage(channelId, aiMessage, { parse_mode: "HTML" });
+      if (imageUrl) {
+          // Rasmni caption bilan yuborish (Telegram caption limini hisobga olish kerak: 1024 belgi max)
+          // Lekin agar matn uzun bo'lsa, avval rasmni yuborib, keyin matnni alohida yuborish xavfsizroq
+          await bot.telegram.sendPhoto(channelId, imageUrl, { caption: "📸 Mavzuga oid tasvir" });
+          await bot.telegram.sendMessage(channelId, aiMessage, { parse_mode: "HTML" });
+      } else {
+          // Agar rasm generatsiya bo'lmasa, faqat matnni yuborish
+          await bot.telegram.sendMessage(channelId, aiMessage, { parse_mode: "HTML" });
+      }
     }
   } catch (error) {
     console.error("Xabar yuborishda xatolik:", error);

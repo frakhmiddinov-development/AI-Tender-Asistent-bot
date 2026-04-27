@@ -55,3 +55,40 @@ ${promptText}`;
         throw error;
     }
 }
+
+export async function generateOpenAIImage(token, promptText) {
+    if (!token) {
+        throw new Error("OpenAI token is missing");
+    }
+
+    try {
+        const response = await fetch('https://api.openai.com/v1/images/generations', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                model: 'dall-e-3',
+                prompt: promptText.substring(0, 4000), // DALL-E 3 supports up to 4000 chars
+                n: 1,
+                size: '1024x1024'
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.text();
+            throw new Error(`OpenAI Image API xatosi: ${response.status} - ${errorData}`);
+        }
+
+        const data = await response.json();
+        if (data.data && data.data.length > 0) {
+            return data.data[0].url;
+        } else {
+            return null;
+        }
+    } catch (error) {
+        console.error("OpenAI Image generatsiyasida xatolik:", error);
+        return null;
+    }
+}
