@@ -71,8 +71,8 @@ export async function handleScheduledEvent(bot, event, env) {
             const html = await response.text();
             
             // Yaxshilangan tozalash: script, style va commentlarni to'liq olib tashlash
-            let cleanText = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ');
-            cleanText = cleanText.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ');
+            let cleanText = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ');
+            cleanText = cleanText.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ');
             cleanText = cleanText.replace(/<!--[\s\S]*?-->/g, ' ');
             
             // Qolgan HTML teglarni olib tashlash va bo'shliqlarni tozalash

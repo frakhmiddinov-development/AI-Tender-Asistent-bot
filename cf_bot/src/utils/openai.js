@@ -5,27 +5,28 @@ export async function generateOpenAIMessage(token, websites, keywords, fetchedCo
 
     const keywordsStr = keywords.length > 0 ? keywords.join(', ') : "yo'q";
 
-    const systemInstruction = `Siz professional tender monitoring AI tizimisiz.
-Sizga web saytlardan olingan matnlar beriladi. Sizning vazifangiz: ushbu matnlar ichidan [${keywordsStr}] kalit so'zlaridan kamida bittasiga mos keladigan barcha tenderlar, ko'rgazmalar yoki muhim yangiliklarni topish.
-Har bir saytda nechta to'g'ri keladigan tender bo'lsa, barchasini alohida-alohida ajratib oling.
+    const systemInstruction = `Siz professional ma'lumot tahlilchisi va tender monitoring tizimisiz.
+Sizga web saytlardan olingan matnlar beriladi. Sizning ASOSIY VAZIFANGIZ: ushbu matnlar ichidan [${keywordsStr}] kalit so'zlaridan kamida bittasi qatnashgan barcha e'lonlar, xaridlar, tenderlar yoki shunchaki maqolalarni topish.
+DIQQAT: Agar matnda kalit so'zlardan biri uchrashsa, uni albatta ro'yxatga qo'shing (garchi u to'liq tenderga o'xshamasa ham).
+Har bir saytda nechta to'g'ri keladigan e'lon bo'lsa, barchasini alohida-alohida ajratib oling.
 Javob QAT'IY ravishda JSON array (ro'yxat) ko'rinishida bo'lishi shart. Har bir obyekt quyidagi kalitlarga ega bo'lsin:
 {
-  "product": "Товар (услуга) qisqa nom",
-  "title": "Название закупки (услуги) to'liq nom",
-  "country": "Страна (davlat)",
-  "type": "Тип (tender turi)",
-  "buyer": "Покупатель (tashkilot)",
+  "product": "Товар (услуга) qisqa nom (yoki mavzu)",
+  "title": "Название закупки (usluga yoki xabar nomi) to'liq nom",
+  "country": "Страна (davlat, noma'lum bo'lsa 'Noma\\'lum')",
+  "type": "Тип (tender, e'lon yoki maqola)",
+  "buyer": "Покупатель (tashkilot yoki sayt nomi)",
   "project": "Проект (loyiha)",
   "sponsor": "Спонсор (agar bor bo'lsa, yo'qsa 'Noma\\'lum')",
-  "number": "Номер тендера (raqam)",
+  "number": "Номер (raqam, bo'lmasa 'Noma\\'lum')",
   "published_date": "Опубликовано (sana)",
-  "deadline": "Дедлайн (muddat)",
+  "deadline": "Дедлайн (muddat, bo'lmasa 'Noma\\'lum')",
   "opening_date": "Вскрытие (agar bor bo'lsa, yo'qsa 'Noma\\'lum')",
-  "notes": "Особые условия (qisqa izoh)",
+  "notes": "Особые условия (qisqa izoh, matndan xulosa)",
   "link": "Ссылка (link)",
   "matched_keywords": "Qaysi kalit so'zlarga to'g'ri kelgani (topilgan kalit so'zlarni # bilan yozing)"
 }
-Agar hech narsa topilmasa, bo'sh array [] qaytaring.`;
+Agar rostdan ham hech qanday kalit so'zga oid ma'lumot matnda umuman yo'q bo'lsa, bo'sh array [] qaytaring.`;
 
     const userPrompt = `MANBALARDAN OLINGAN MATNLAR:\n${fetchedContent || "Matn topilmadi."}`;
 

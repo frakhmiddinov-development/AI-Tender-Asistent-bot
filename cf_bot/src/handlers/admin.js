@@ -618,25 +618,37 @@ export function setupAdminHandlers(bot) {
 
         try {
             let allSitesContent = "";
+            let fetchErrors = [];
             for (const site of websites) {
                 const url = typeof site === 'object' ? site.url : site;
                 const cookie = typeof site === 'object' ? site.cookie : "";
                 try {
                     const response = await fetch(url, {
-                        headers: { 'Cookie': cookie, 'User-Agent': 'Mozilla/5.0 ...' }
+                        headers: { 'Cookie': cookie, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
                     });
                     if (response.ok) {
                         const html = await response.text();
-                        let cleanText = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ');
-                        cleanText = cleanText.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ');
+                        let cleanText = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ');
+                        cleanText = cleanText.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ');
                         cleanText = cleanText.replace(/<!--[\s\S]*?-->/g, ' ');
                         cleanText = cleanText.replace(/<[^>]*>?/gm, ' ').replace(/\s\s+/g, ' ').trim();
                         cleanText = cleanText.substring(0, 15000);
                         allSitesContent += `\n--- SOURCE: ${url} ---\n${cleanText}\n`;
+                    } else {
+                        fetchErrors.push(`${url} (Xato kod: ${response.status})`);
                     }
                 } catch (e) {
-                    console.error(`Test fetch error for ${url}:`, e);
+                    fetchErrors.push(`${url} (Xatolik: ${e.message})`);
                 }
+            }
+
+            if (fetchErrors.length > 0) {
+                await ctx.reply("⚠️ Quyidagi saytlardan ma'lumot olishda muammo yuz berdi (Sayt himoyasi yoki noto'g'ri URL):\n" + fetchErrors.join("\n"));
+            }
+
+            if (allSitesContent.trim().length === 0) {
+                await ctx.reply("Hech qaysi saytdan matn olinmadi. Iltimos sayt manzillarini tekshiring.");
+                return;
             }
 
             const jsonResponse = await generateOpenAIMessage(token, websites, keywords, allSitesContent);
