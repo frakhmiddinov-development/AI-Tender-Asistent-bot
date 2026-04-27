@@ -1,4 +1,4 @@
-import { generateOpenAIMessage } from '../utils/openai.js';
+import { generateOpenAIMessage, generateOpenAIImage } from '../utils/openai.js';
 import { Markup } from 'telegraf';
 import { getUserLang, getUserState, setUserState } from '../utils/session.js';
 import { TEXTS } from '../utils/texts.js';
@@ -723,7 +723,30 @@ export function setupAdminHandlers(bot) {
 🔗 Ссылка: ${tender.link || ''}
 
 ${tender.matched_keywords || ''}`;
-                await ctx.reply(tenderMessage, { parse_mode: "HTML" });
+                
+                await ctx.reply("Rasm generatsiya qilinmoqda, kuting...");
+                const imagePrompt = `A professional, high-quality, corporate-style image representing the following tender topic: ${tender.title}. Do not include any text.`;
+                let imageUrl = null;
+                try {
+                    imageUrl = await generateOpenAIImage(token, imagePrompt);
+                } catch (e) {
+                    console.error("Test rasmini yaratishda xatolik:", e);
+                }
+
+                if (imageUrl) {
+                    try {
+                        await ctx.replyWithPhoto(imageUrl, { caption: tenderMessage, parse_mode: "HTML" });
+                    } catch (err) {
+                        if (err.description && err.description.includes('caption is too long')) {
+                            await ctx.replyWithPhoto(imageUrl, { caption: "📸 Mavzuga oid tasvir" });
+                            await ctx.reply(tenderMessage, { parse_mode: "HTML" });
+                        } else {
+                            await ctx.reply(tenderMessage, { parse_mode: "HTML" });
+                        }
+                    }
+                } else {
+                    await ctx.reply(tenderMessage, { parse_mode: "HTML" });
+                }
             }
             await ctx.reply(TEXTS[lang].msg_test_success, { parse_mode: "HTML" });
         } catch (error) {
