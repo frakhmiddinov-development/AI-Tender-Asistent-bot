@@ -68,7 +68,20 @@ export async function handleScheduledEvent(bot, event, env) {
                 continue;
             }
 
-            const html = await response.text();
+            let html = await response.text();
+            
+            // SPA / JS-rendered saytlarni aniqlash
+            if (html.includes('<app-root>') || html.includes('id="app"') || (html.length < 5000 && html.includes('<script'))) {
+                console.log(`SPA aniqlandi: ${url}, Jina orqali yuklanmoqda...`);
+                try {
+                    const jinaResponse = await fetch(`https://r.jina.ai/${url}`);
+                    if (jinaResponse.ok) {
+                        html = await jinaResponse.text();
+                    }
+                } catch(e) {
+                    console.error("Jina fetch error:", e);
+                }
+            }
             
             // Yaxshilangan tozalash: script, style va commentlarni to'liq olib tashlash
             let cleanText = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ');
@@ -78,7 +91,7 @@ export async function handleScheduledEvent(bot, event, env) {
             // Qolgan HTML teglarni olib tashlash va bo'shliqlarni tozalash
             cleanText = cleanText.replace(/<[^>]*>?/gm, ' ').replace(/\s\s+/g, ' ').trim();
             
-            // Yuzaki o'qimasligi uchun har bir saytdan olinadigan matn hajmini 3 barobarga oshiramiz (15000 belgi)
+            // Yuzaki o'qimasligi uchun har bir saytdan olinadigan matn hajmini oshiramiz
             cleanText = cleanText.substring(0, 15000);
             
             allSitesContent += `\n--- SOURCE: ${url} ---\n${cleanText}\n`;

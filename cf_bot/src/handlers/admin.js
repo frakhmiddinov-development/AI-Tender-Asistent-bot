@@ -623,11 +623,21 @@ export function setupAdminHandlers(bot) {
                 const url = typeof site === 'object' ? site.url : site;
                 const cookie = typeof site === 'object' ? site.cookie : "";
                 try {
-                    const response = await fetch(url, {
+                    let response = await fetch(url, {
                         headers: { 'Cookie': cookie, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
                     });
                     if (response.ok) {
-                        const html = await response.text();
+                        let html = await response.text();
+                        
+                        // SPA / JS-rendered saytlarni aniqlash (Masalan: Angular <app-root> yoki React/Vue)
+                        if (html.includes('<app-root>') || html.includes('id="app"') || (html.length < 5000 && html.includes('<script'))) {
+                            console.log(`SPA aniqlandi: ${url}, JS render orqali (Jina) yuklanmoqda...`);
+                            const jinaResponse = await fetch(`https://r.jina.ai/${url}`);
+                            if (jinaResponse.ok) {
+                                html = await jinaResponse.text(); // Jina tayyor toza matn qaytaradi
+                            }
+                        }
+
                         let cleanText = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ');
                         cleanText = cleanText.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ');
                         cleanText = cleanText.replace(/<!--[\s\S]*?-->/g, ' ');
