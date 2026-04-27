@@ -24,7 +24,7 @@ ${promptText}`;
                 'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
-                model: 'gpt-4o-mini',
+                model: 'gpt-5-pro',
                 messages: [
                     {
                         role: 'system',
