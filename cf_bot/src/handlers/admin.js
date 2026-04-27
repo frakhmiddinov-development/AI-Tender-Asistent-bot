@@ -695,6 +695,7 @@ export function setupAdminHandlers(bot) {
                 return;
             }
 
+            let isFirstTender = true;
             for (const tender of tenders) {
                 const tenderMessage = `Товар (услуга): ${tender.product || ''}
 
@@ -724,26 +725,31 @@ export function setupAdminHandlers(bot) {
 
 ${tender.matched_keywords || ''}`;
                 
-                await ctx.reply("Rasm generatsiya qilinmoqda, kuting...");
-                const imagePrompt = `A professional, high-quality, corporate-style image representing the following tender topic: ${tender.title}. Do not include any text.`;
-                let imageUrl = null;
-                try {
-                    imageUrl = await generateOpenAIImage(token, imagePrompt);
-                } catch (e) {
-                    console.error("Test rasmini yaratishda xatolik:", e);
-                }
-
-                if (imageUrl) {
+                if (isFirstTender) {
+                    await ctx.reply("Rasm generatsiya qilinmoqda (faqat birinchi tender uchun test qilinadi), kuting...");
+                    const imagePrompt = `A professional, high-quality, corporate-style image representing the following tender topic: ${tender.title}. Do not include any text.`;
+                    let imageUrl = null;
                     try {
-                        await ctx.replyWithPhoto(imageUrl, { caption: tenderMessage, parse_mode: "HTML" });
-                    } catch (err) {
-                        if (err.description && err.description.includes('caption is too long')) {
-                            await ctx.replyWithPhoto(imageUrl, { caption: "📸 Mavzuga oid tasvir" });
-                            await ctx.reply(tenderMessage, { parse_mode: "HTML" });
-                        } else {
-                            await ctx.reply(tenderMessage, { parse_mode: "HTML" });
-                        }
+                        imageUrl = await generateOpenAIImage(token, imagePrompt);
+                    } catch (e) {
+                        console.error("Test rasmini yaratishda xatolik:", e);
                     }
+
+                    if (imageUrl) {
+                        try {
+                            await ctx.replyWithPhoto(imageUrl, { caption: tenderMessage, parse_mode: "HTML" });
+                        } catch (err) {
+                            if (err.description && err.description.includes('caption is too long')) {
+                                await ctx.replyWithPhoto(imageUrl, { caption: "📸 Mavzuga oid tasvir" });
+                                await ctx.reply(tenderMessage, { parse_mode: "HTML" });
+                            } else {
+                                await ctx.reply(tenderMessage, { parse_mode: "HTML" });
+                            }
+                        }
+                    } else {
+                        await ctx.reply(tenderMessage, { parse_mode: "HTML" });
+                    }
+                    isFirstTender = false;
                 } else {
                     await ctx.reply(tenderMessage, { parse_mode: "HTML" });
                 }
